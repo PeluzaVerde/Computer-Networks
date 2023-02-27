@@ -1,0 +1,129 @@
+#include <sys/types.h>
+
+#include <sys/socket.h>
+
+#include <stdio.h>
+
+#include <netinet/in.h>
+
+#include <netinet/ip.h>
+
+#include <string.h>
+
+#include <unistd.h>
+
+#include <arpa/inet.h>
+#include <stdlib.h>
+
+ 
+
+int main() {
+
+    int c;
+
+    struct sockaddr_in server;
+
+       
+
+    c = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (c < 0) {
+        printf("Eroare la crearea socketului client\n");
+        return 1;
+    }
+
+ 
+
+    memset(&server, 0, sizeof(server));
+
+    server.sin_port = htons(1234);
+
+    server.sin_family = AF_INET;
+
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+ 
+
+    if (connect(c, (struct sockaddr *) &server, sizeof(server)) < 0) {
+        printf("Eroare la conectarea la server\n");
+        return 1;
+    }
+
+    //declaring variables for the first array of numbers
+    int length_first_array, first_array[10];
+
+    //reading the length of the first array from stdin
+    printf("INPUT LENGTH OF FIRST ARRAY:");
+    scanf("%d",&length_first_array);
+
+    //reading the array of numbers from stdin
+    printf("INPUT THE FIRST ARRAY:");
+    for(int i=0;i<length_first_array;i++){
+        int aux;
+        scanf("%d",&aux);
+        first_array[i]=aux;
+    }
+
+    //sending the first array to the server
+    int aux_length=length_first_array;
+    length_first_array=htons(length_first_array);
+    if(send(c,&length_first_array,sizeof(int),0)!=sizeof(int)){
+        printf("error sending length of first array\n");
+        return 1;
+    }
+    if(send(c,first_array,aux_length*sizeof(int),0)!=aux_length*sizeof(int)){
+        printf("error sending first array of integers\n");
+        return 1;
+    }
+
+    //declaring variables for the second array of numbers
+    int length_second_array, second_array[10];
+
+    //reading the length of the second string from stdin
+    printf("INPUT LENGTH OF SECOND ARRAY:");
+    scanf("%d",&length_second_array);
+
+    //reading the array of numbers from stdin
+    printf("INPUT THE SECOND ARRAY:");
+    for(int i=0;i<length_second_array;i++){
+        int aux;
+        scanf("%d",&aux);
+        second_array[i]=aux;
+    }
+
+    //sending the second array to the server
+    int aux_length2=length_second_array;
+    length_second_array=htons(length_second_array);
+    if(send(c,&length_second_array,sizeof(int),0)!=sizeof(int)){
+        printf("error sending length of second array\n");
+        return 1;
+    }
+    if(send(c,second_array,aux_length2*sizeof(int),0)!=aux_length2*sizeof(int)){
+        printf("error sending second array of integers\n");
+        return 1;
+    }
+
+
+
+    //receiving the intersection array
+    int intersection_length;
+
+    if(recv(c, &intersection_length,sizeof(int),0)!=sizeof(int)){
+        printf("error receiving length of intersection\n");
+        return 1;
+    }
+    intersection_length=ntohs(intersection_length);
+
+    //reading and printing the intersection
+    printf("INTERSECTION OF THE TWO ARRAYS:\n");
+    for(int i=0;i<intersection_length;i++){
+        int aux;
+        recv(c, &aux,sizeof(int),0);
+        printf("%d ",aux);
+    }
+    printf("\n");
+    close(c);
+
+}
+
+ 

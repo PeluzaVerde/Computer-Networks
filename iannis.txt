@@ -1,0 +1,103 @@
+#include <sys/types.h>
+
+#include <sys/socket.h>
+
+#include <stdio.h>
+
+#include <netinet/in.h>
+
+#include <netinet/ip.h>
+
+#include <string.h>
+
+#include <unistd.h>
+
+#include <arpa/inet.h>
+#include <stdlib.h>
+
+ 
+
+int main() {
+
+       int c;
+
+       struct sockaddr_in server;
+
+       
+
+       c = socket(AF_INET, SOCK_STREAM, 0);
+
+       if (c < 0) {
+
+              printf("Eroare la crearea socketului client\n");
+
+              return 1;
+
+       }
+
+ 
+
+       memset(&server, 0, sizeof(server));
+
+       server.sin_port = htons(1234);
+
+       server.sin_family = AF_INET;
+
+       server.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+ 
+
+       if (connect(c, (struct sockaddr *) &server, sizeof(server)) < 0) {
+
+              printf("Eroare la conectarea la server\n");
+
+              return 1;
+
+       }
+
+ 
+        char string[15], ch;
+        printf("INPUT STRING:");
+        fgets(string,15,stdin);
+        printf("INPUT CHARACTER:");
+        scanf("%c",&ch);
+
+        int length=strlen(string),le=length;
+
+        //sending character
+        if(send(c, &ch, sizeof(char),0)!= sizeof(char)){
+            printf("error sending character\n");
+            return 1;
+        }
+
+        //sending length + string
+        length=htons(length);
+        if(send(c,&length,sizeof(int),0)!=sizeof(int)){
+            printf("error sending length of string\n");
+            return 1;
+        }
+        if(send(c,string, sizeof(char)*le,0)!=sizeof(char)*le){
+            printf("error sending string\n");
+            return 1;
+        }
+
+
+        int nr_positions;
+        //receive nr of positions from server
+        if(recv(c,&nr_positions,sizeof(int),0)!=sizeof(int)){
+            printf("error receiving nr of positions\n");
+            return 1;
+        }
+        printf("positions where the character %c is found: ", ch);
+        int aux;
+        nr_positions=ntohs(nr_positions);
+        for(int i=0;i<nr_positions;i++){
+            recv(c, &aux, sizeof(int),0);
+            printf("%d ", aux);
+        }
+        printf("\n");
+       close(c);
+
+}
+
+ 

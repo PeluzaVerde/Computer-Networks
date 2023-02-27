@@ -1,0 +1,185 @@
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <signal.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+#include <stdbool.h>
+
+int stcp;
+int sudp;
+int number_to_guess;
+int client_count = 0;
+int winner = 0;
+bool client_guessed = false;
+pthread_mutex_t mutex;
+pthread_t threads[5];
+int client_descr[5];
+int nr_max_clienti = 2;
+pthread_barrier_t barrier;
+
+void worker_thread(void *a)
+{
+  pthread_barrier_wait(&barrier);
+  int id_client = (int)a;
+  // printf("id client %d\n",id_client);
+  int id_client_copy = id_client;
+  // printf("id client copy %d\n",id_client_copy);
+  id_client_copy = htons(id_client_copy);
+  // printf("id client copy %d\n",id_client_copy);
+  int descr = (int)a;
+  printf("descr %d\n", descr);
+  if (send(descr, &id_client_copy, sizeof(int), 0) < 0)
+  {
+    perror("error sending client id\n");
+  }
+  int number_from_client;
+  while (1)
+  {
+    pthread_mutex_lock(&mutex);
+    if (!client_guessed)
+    {
+      printf("client_guessed: %d\n", client_guessed);
+      recv(descr, &number_from_client, sizeof(int), 0);
+      number_from_client = ntohl(number_from_client);
+      char to_send;
+      if (number_from_client == number_to_guess)
+      {
+        client_guessed = true;
+        winner = id_client;
+        break;
+      }
+      else
+      {
+        if (number_from_client < number_to_guess)
+          to_send = 'H';
+        else
+          to_send = 'L';
+        pthread_mutex_unlock(&mutex);
+        printf("server send to %d\n", descr);
+        send(descr, &to_send, sizeof(char), 0);
+      }
+    }
+    else
+    {
+      pthread_mutex_unlock(&mutex);
+      break;
+    }
+  }
+  char s = 'D';
+  printf("server send to %d\n", descr);
+  send(descr, &s, sizeof(char), 0);
+  printf("am iesit\n");
+  pthread_mutex_unlock(&mutex);
+  /// mai vedem
+}
+
+int main()
+{
+  srand((unsigned int)time(NULL));
+  int cod;
+  unsigned int l;
+  int minimum = 0, maximum = 101;
+  number_to_guess = (rand() % (maximum - minimum + 1)) + minimum;
+  printf("number to guess: %d\n", number_to_guess);
+  struct sockaddr_in tcp_server;
+  struct sockaddr_in udp_server;
+
+  stcp = socket(AF_INET, SOCK_STREAM, 0);
+
+  if (stcp < 0)
+  {
+    fprintf(stderr, "Eroare la creare socket server tcp.\n");
+    return 1;
+  }
+  int yes = 1;
+  if (setsockopt(stcp, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0)
+  {
+    perror("error in setting broadcast option\n");
+    // close(udp_server);
+    return 1;
+  }
+  memset(&tcp_server, 0, sizeof(struct sockaddr_in));
+  tcp_server.sin_family = AF_INET;
+  tcp_server.sin_port = htons(7777);
+  tcp_server.sin_addr.s_addr = INADDR_ANY;
+
+  cod = bind(stcp, (struct sockaddr *)&tcp_server, sizeof(struct sockaddr_in));
+  if (cod < 0)
+  {
+    fprintf(stderr, "Eroare la bind tcp. Portul este deja folosit.\n");
+    return 1;
+  }
+
+  int broadcast = 1;
+  sudp = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sudp < 0)
+  {
+    perror("error creating udp socket.\n");
+    close(stcp);
+    exit(1);
+  }
+  if (setsockopt(sudp, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) < 0)
+  {
+    perror("error in setting broadcast option\n");
+    close(sudp);
+    return 1;
+  }
+  memset(&udp_server, 0, sizeof(udp_server));
+  udp_server.sin_family = AF_INET;
+  udp_server.sin_port = htons(8888);
+  udp_server.sin_addr.s_addr = inet_addr("192.168.0.255");
+  // udp_server.sin_addr.s_addr = INADDR_BROADCAST;
+
+  listen(stcp, 5);
+  struct sockaddr_in client;
+  pthread_mutex_init(&mutex, NULL);
+  pthread_barrier_init(&barrier, NULL, nr_max_clienti);
+
+  // while (1)
+  // { // deserveste oricati clienti
+  //   pthread_mutex_lock(&mutex);
+  //   if (!client_guessed)
+  //   {
+  //     l = sizeof(client);
+  //     memset(&client, 0, sizeof(client));
+  //     printf("Astept sa se conecteze un client.\n");
+  //     // pthread_mutex_lock(&mutex);
+  //     int descr = accept(stcp, (struct sockaddr *)&client, &l);
+  //     // printf("cl dr %d\n", client_descr[client_count]);
+
+  //     printf("S-a conectat clientul cu adresa %s si portul %d.\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+  //     pthread_create(&threads[client_count], NULL, (void *)worker_thread, (void *)descr);
+  //     pthread_mutex_unlock(&mutex);
+  //     // parintele continua bucla while asteptand un nou client
+  //     client_count++;
+  //   }
+  // }
+
+  for (int i = 0; i < nr_max_clienti; i++)
+  {
+    l = sizeof(client);
+    memset(&client, 0, sizeof(client));
+    printf("Astept sa se conecteze un client.\n");
+
+    int descr = accept(stcp, (struct sockaddr *)&client, &l);
+    printf("S-a conectat clientul cu adresa %s si portul %d.\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+    pthread_create(&threads[client_count], NULL, (void *)worker_thread, (void *)descr);
+  }
+  for (int i = 0; i < nr_max_clienti; i++)
+    pthread_join(threads[i], NULL);
+
+  int length = sizeof(udp_server);
+  printf("Winning client: %d\n", winner);
+  winner = htonl(winner);
+
+  sendto(sudp, &winner, sizeof(int), 0, (struct sockaddr *)&udp_server, length);
+  pthread_mutex_destroy(&mutex);
+  pthread_barrier_destroy(&barrier);
+
+  return 0;
+}

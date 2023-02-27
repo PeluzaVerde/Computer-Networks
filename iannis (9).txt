@@ -1,0 +1,206 @@
+#define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+
+// exists on all platforms
+
+#include <stdio.h>
+
+ 
+
+// this section will only be compiled on NON Windows platforms
+
+#ifndef _WIN32
+
+#include <sys/types.h>
+
+#include <sys/socket.h>
+
+#include <netinet/in.h>
+
+#include <netinet/ip.h>
+
+#include <string.h>
+
+#include <arpa/inet.h>
+
+#include <unistd.h>
+
+#include <errno.h>
+
+ 
+
+#define closesocket close
+
+typedef int SOCKET;
+
+#else
+
+// on Windows include and link these things
+
+#include<WinSock2.h>
+
+// for uint16_t an so
+
+#include<cstdint>
+
+ 
+
+// this is how we can link a library directly from the source code with the VC++ compiler – otherwise got o project settings and link to it explicitly
+
+//#pragma comment(lib,"Ws2_32.lib")
+
+#endif
+
+ 
+
+int main() {
+
+       SOCKET s;
+
+       struct sockaddr_in server, client;
+
+       int c, err;
+       unsigned int l;
+
+ 
+
+// initialize the Windows Sockets LIbrary only when compiled on Windows
+
+    #ifdef _WIN32
+       WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) < 0) {
+            printf("Error initializing the Windows Sockets Library");
+            return -1;
+
+       }
+
+#endif
+
+    s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0) {
+        printf("Eroare la crearea socketului server\n");
+        return 1;
+    }
+
+    memset(&server, 0, sizeof(server));
+    server.sin_port = htons(1234);
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+
+
+    if (bind(s, (struct sockaddr *) &server, sizeof(server)) < 0) {
+        perror("Bind error:");
+        return 1;
+    }
+
+ 
+
+    listen(s, 5);
+
+    l = sizeof(client);
+
+    memset(&client, 0, sizeof(client));
+
+ 
+
+    while (1) {
+        printf("Listening for incoming connections\n");
+
+        c = accept(s, (struct sockaddr *) &client, &l);
+
+        err = errno;
+
+#ifdef _WIN32
+
+    err = WSAGetLastError();
+
+#endif
+
+        if (c < 0) {
+            printf("accept error: %d", err);
+            continue;
+        }
+
+        printf("Incoming connected client from: %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+        
+        // serving the connected client
+        char first_string[25], second_string[25];
+
+        int first_length,second_length;
+
+        //receiving strings
+        if(recv(c,&first_length,sizeof(int),0)!=sizeof(int)){
+            printf("error receiving length of first string\n");
+            continue;
+        }
+        first_length=ntohs(first_length);
+        for(int i=0;i<first_length;i++){
+            char aux;
+            recv(c,&aux,sizeof(char),0);
+            first_string[i]=aux;
+        }
+
+        printf("first string received:\n%s\n",first_string);
+
+        if(recv(c,&second_length,sizeof(int),0)!=sizeof(int)){
+            printf("error receiving length of second string\n");
+            continue;
+        }
+        second_length=ntohs(second_length);
+        for(int i=0;i<second_length;i++){
+            char aux;
+            recv(c,&aux,sizeof(char),0);
+            second_string[i]=aux;
+        }
+
+        printf("second string received:\n%s\n",second_string);
+
+        int max_occ=0, aux_occ=0;
+        char max_char, aux_char;
+
+        for(int i=0;i<first_length && i<second_length;i++){
+            aux_occ=0;
+            aux_char=first_string[i];
+            for(int j=0;j<first_length && j<second_length;j++){
+                if(aux_char==first_string[j] && first_string[j]==second_string[j]){
+                    aux_occ++;
+                }
+            }
+            if(aux_occ>max_occ){
+                max_occ=aux_occ;
+                max_char=aux_char;
+            }
+        }
+
+        printf("\ncharacter %c has max nr of occ = %d\n",max_char,max_occ);
+
+
+        if(send(c,&max_char,sizeof(char),0)!=sizeof(char)){
+            printf("error sending character\n");
+            continue;
+        }
+        
+        max_occ=htons(max_occ);
+        if(send(c,&max_occ,sizeof(int),0)!=sizeof(int)){
+            printf("error sending nr occurences\n");
+            continue;
+        }
+
+        printf("\n");
+              
+        closesocket(c);
+
+    }
+
+ 
+
+       // never reached
+
+       // Release the Windows Sockets Library
+
+#ifdef _WIN32
+
+       WSACleanup();
+
+#endif
+
+}

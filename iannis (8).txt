@@ -1,0 +1,118 @@
+#include <sys/types.h>
+
+#include <sys/socket.h>
+
+#include <stdio.h>
+
+#include <netinet/in.h>
+
+#include <netinet/ip.h>
+
+#include <string.h>
+
+#include <unistd.h>
+
+#include <arpa/inet.h>
+#include <stdlib.h>
+
+ 
+
+int main() {
+
+    int c;
+
+    struct sockaddr_in server;
+
+       
+
+    c = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (c < 0) {
+        printf("Eroare la crearea socketului client\n");
+        return 1;
+    }
+
+ 
+
+    memset(&server, 0, sizeof(server));
+
+    server.sin_port = htons(1234);
+
+    server.sin_family = AF_INET;
+
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+ 
+
+    if (connect(c, (struct sockaddr *) &server, sizeof(server)) < 0) {
+        printf("Eroare la conectarea la server\n");
+        return 1;
+    }
+
+    //declaring the strings
+    char first_string[25], second_string[25];
+
+    printf("INPUT FIRST STRING:");
+    fgets(first_string,25,stdin);
+
+    int first_length = strlen(first_string);
+    int f_length=first_length;
+    
+    first_length=htons(first_length);
+
+    if(send(c,&first_length,sizeof(int),0)!=sizeof(int)){
+        printf("error sending length of first string\n");
+        return 1;
+    }
+
+    if(send(c, first_string,sizeof(char)*f_length,0)!=f_length*sizeof(char)){
+        printf("error sending first string\n");
+        return 1;
+    }
+
+    printf("INPUT SECOND STRING:");
+    fgets(second_string,25,stdin);
+
+    
+    int second_length = strlen(second_string);
+    int s_length=second_length;
+    //printf("second length: %d\n",second_length);
+    
+    second_length=htons(second_length);
+
+    if(send(c,&second_length,sizeof(int),0)!=sizeof(int)){
+        printf("error sending length of second string\n");
+        return 1;
+    }
+
+    if(send(c, second_string,sizeof(char)*s_length,0)!=s_length*sizeof(char)){
+        printf("error sending second string\n");
+        return 1;
+    }
+
+
+    char character;
+    int nr_occ;
+
+    if(recv(c,&character,sizeof(char),0)!=sizeof(char)){
+        printf("error receiving character\n");
+        return 1;
+    }
+
+    if(recv(c,&nr_occ,sizeof(int),0)!=sizeof(int)){
+        printf("error receiving nr occurences\n");
+        return 1;
+    }
+
+    nr_occ=ntohs(nr_occ);
+    printf("\ncharacter %c with %d occurences\n",character,nr_occ);
+
+
+
+
+ 
+    close(c);
+
+}
+
+ 

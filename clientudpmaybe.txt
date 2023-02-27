@@ -1,0 +1,133 @@
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <time.h>
+
+#define max 100
+
+int main()
+{
+    int client_guessed = 0;
+    // int step_count = 0;
+    int id_client;
+    int tcp_server, cod;
+    int udp_server;
+    // int32_t r;
+    srand((unsigned int)time(NULL));
+    struct sockaddr_in server_tcp;
+    struct sockaddr_in server_udp;
+    int broadcast = 1;
+
+    
+    udp_server = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udp_server < 0)
+    {
+        fprintf(stderr, "Eroare la creare socket client udp.\n");
+        return 1;
+    }
+    if (setsockopt(udp_server, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) < 0)
+    {
+        perror("error in setting broadcast option\n");
+        close(udp_server);
+        return 1;
+    }
+    tcp_server = socket(AF_INET, SOCK_STREAM, 0);
+    if (tcp_server < 0)
+    {
+        fprintf(stderr, "Eroare la creare socket client tcp.\n");
+        return 1;
+    }
+
+    int minimum = 0, maximum = 101;
+    // int number = rand() % (maximum+1);
+
+    memset(&server_tcp, 0, sizeof(struct sockaddr_in));
+    server_tcp.sin_family = AF_INET;
+    server_tcp.sin_port = htons(7777);
+    server_tcp.sin_addr.s_addr = inet_addr("192.168.0.114");
+
+    memset(&server_udp, 0, sizeof(struct sockaddr_in));
+    server_udp.sin_family = AF_INET;
+    server_udp.sin_port = htons(8888);
+    server_udp.sin_addr.s_addr = INADDR_ANY;
+
+    bind(udp_server,(struct sockaddr*)&server_udp,sizeof(server_udp));
+
+    cod = connect(tcp_server, (struct sockaddr *)&server_tcp, sizeof(struct sockaddr_in));
+    if (cod < 0)
+    {
+        fprintf(stderr, "Eroare la conectarea la server tcp.\n");
+        return 1;
+    }
+
+    
+    // printf("client %d\n",id_client);
+    if(recv(tcp_server,&id_client,sizeof(int),0)<0){
+        perror("error receiving client id\n");
+        close(udp_server);
+        close(tcp_server);
+        exit(1);
+    }
+    id_client=ntohs(id_client);
+    printf("id client: %d\n",id_client);
+
+    char from_server;
+    while (client_guessed == 0)
+    {
+
+        int number =  (rand() % (maximum - minimum + 1)) + minimum;
+        printf("guess: %d\n",number);
+        number = htonl(number);
+        if (send(tcp_server, &number, sizeof(int), 0) == -1)
+        {
+            perror("number not sent\n");
+            close(udp_server);
+            close(tcp_server);
+            exit(1);
+        }
+        if (recv(tcp_server, &from_server, sizeof(char), 0) == -1)
+        {
+            perror("error receiving from server\n");
+            close(udp_server);
+            close(tcp_server);
+            exit(1);
+        }
+        number = ntohl(number);
+        printf("from server: %c\n",from_server);
+        switch (from_server)
+        {
+        case 'H':
+            minimum = number;
+            break;
+        case 'L':
+            maximum = number;
+            break;
+        case 'D':
+            client_guessed=1;
+            break;
+        }
+        sleep(0.5);
+    }
+
+    int id_winning_client;
+    uint32_t len = sizeof(struct sockaddr_in);
+    printf("inainte de rcvfrom\n");
+    recvfrom(udp_server,&id_winning_client,sizeof(int),0,(struct sockaddr *)&server_udp,&len);
+
+    id_winning_client = ntohl(id_winning_client);
+    if(id_client==id_winning_client){
+        printf("You won!\n");
+    }
+    else
+        printf("You lost!\nClient %d won.\n",id_winning_client);
+
+
+
+    close(tcp_server);
+    close(udp_server);
+}

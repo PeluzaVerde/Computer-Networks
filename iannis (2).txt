@@ -1,0 +1,118 @@
+ #include <sys/types.h>
+
+#include <sys/socket.h>
+
+#include <stdio.h>
+
+#include <netinet/in.h>
+
+#include <netinet/ip.h>
+
+#include <string.h>
+
+#include <unistd.h>
+
+#include <arpa/inet.h>
+#include <stdlib.h>
+
+ 
+
+int main() {
+
+    int c;
+
+    struct sockaddr_in server;
+
+       
+
+    c = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (c < 0) {
+        printf("Eroare la crearea socketului client\n");
+        return 1;
+    }
+
+ 
+
+    memset(&server, 0, sizeof(server));
+
+    server.sin_port = htons(1234);
+
+    server.sin_family = AF_INET;
+
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+ 
+
+    if (connect(c, (struct sockaddr *) &server, sizeof(server)) < 0) {
+        printf("Eroare la conectarea la server\n");
+        return 1;
+    }
+
+    ///declaring some variables.
+    char string[25];
+    int begin,end;
+
+    ///reading input string
+    printf("INPUT STRING:");
+    fgets(string, 25, stdin);
+    
+    int length=strlen(string);
+
+    ///reading input numbers
+    printf("INPUT FIRST NUMBER:");
+    scanf("%d",&begin);
+
+    printf("INPUT SECOND NUMBER:");
+    scanf("%d", &end);
+
+    //sending the string
+    int l=length;
+    length=htons(length);
+    if(send(c,&length,sizeof(int),0)!=sizeof(int)){
+        printf("error sending length of string\n");
+        return 1;
+    }
+    
+    if(send(c, string, sizeof(char)*l,0)!=sizeof(char)*l){
+        printf("error sending string\n");
+        return 1;
+    }
+
+    //sending the numbers
+    begin=htons(begin);
+    if(send(c,&begin,sizeof(int),0)!=sizeof(int)){
+        printf("error sending first number\n");
+        return 1;
+    }
+    end=htons(end);
+    if(send(c,&end,sizeof(int),0)!=sizeof(int)){
+        printf("error sending second number\n");
+        return 1;
+    }
+
+
+    //receiving the substring
+    int substring_length;
+    if(recv(c,&substring_length,sizeof(int),0)!=sizeof(int)){
+        printf("error receiving substring length\n");
+        return 1;
+    }
+    substring_length=ntohs(substring_length);
+
+    char substring[25];
+    for (int i=0;i<substring_length;i++){
+        char aux;
+        recv(c,&aux,sizeof(char),0);
+        substring[i]=aux;
+    }
+
+    //printing the substring:
+    printf("substring received:\n");
+    printf("%s\n",substring);
+
+    close(c);
+
+}
+
+ 
